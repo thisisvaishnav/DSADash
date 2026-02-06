@@ -1,0 +1,131 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String
+  email         String    @unique
+  emailVerified Boolean   @default(true)
+  image         String?
+  rating        Int       @default(1200)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  accounts      Account[]
+  sessions      Session[]
+  submissions   Submission[]
+  matches       MatchParticipant[]
+  leaderboard   LeaderboardEntry?
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id])
+}
+
+model Question {
+  id         Int      @id @default(autoincrement())
+  category   String
+  difficulty String
+  question   String
+  testcases  Json
+  createdAt  DateTime @default(now())
+}
+
+enum MatchStatus {
+  WAITING
+  RUNNING
+  FINISHED
+}
+
+model Match {
+  id           String              @id @default(uuid())
+  status       MatchStatus
+  winnerId     String?
+  startedAt    DateTime?
+  endedAt      DateTime?
+  createdAt    DateTime            @default(now())
+
+  questions    MatchQuestion[]
+  submissions  Submission[]
+  participants MatchParticipant[]
+}
+
+model MatchParticipant {
+  matchId      String
+  userId       String
+  joinedAt     DateTime @default(now())
+  ratingChange Int?
+
+  match        Match    @relation(fields: [matchId], references: [id])
+  user         User     @relation(fields: [userId], references: [id])
+
+  @@unique([matchId, userId])
+}
+
+model MatchQuestion {
+  id         String @id @default(uuid())
+  matchId    String
+  questionId Int
+  order      Int
+
+  match      Match  @relation(fields: [matchId], references: [id])
+}
+
+model Submission {
+  id         String   @id @default(cuid())
+  userId     String
+  questionId Int
+  matchId    String
+  code       String
+  status     String
+  createdAt  DateTime @default(now())
+
+  user       User     @relation(fields: [userId], references: [id])
+  match      Match    @relation(fields: [matchId], references: [id])
+}
+
+model LeaderboardEntry {
+  id            String    @id @default(cuid())
+  userId        String    @unique
+  rank          Int       @default(0)
+  rating        Int       @default(1200)
+  wins          Int       @default(0)
+  losses        Int       @default(0)
+  totalMatches  Int       @default(0)
+  winStreak     Int       @default(0)
+
+  user          User      @relation(fields: [userId], references: [id])
+
+  @@index([rating(sort: Desc)])
+}
