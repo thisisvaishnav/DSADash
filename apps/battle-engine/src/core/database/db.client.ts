@@ -28,3 +28,5 @@ export const disconnectDB = async (): Promise<void> => {
   await db.$disconnect();
   console.log('🔌 Database disconnected');
 };
+
+

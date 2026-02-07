@@ -3,7 +3,10 @@ import http from 'http';
 import { Server } from 'socket.io';
 import { socketConfig } from '../../config/socket.config';
 import { TypedServer, TypedSocket, ServerToClientEvents } from './socket.types';
-import { auth } from '../../features/auth/auth.service'
+import { auth } from '../../features/auth/auth.service';
+import { registerMatchHandlers } from '../../features/match/match.socket';
+import { registerChatHandlers } from '../../features/chat/chat.socket';
+import { registerSubmissionHandlers } from '../../features/submission/submission.socket';
 
 // ─── State ────────────────────────────────────────────────────────────
 let io: TypedServer | null = null;
@@ -21,6 +24,10 @@ export const initSocket = (server: http.Server): TypedServer => {
     const { userId, userName } = socket.data;
     userSockets.set(userId, socket.id);
     console.log(`🟢 ${userName} connected (${userSockets.size} online)`);
+
+    registerMatchHandlers(socket);
+    registerChatHandlers(socket);
+    registerSubmissionHandlers(socket);
 
     socket.on('disconnect', (reason) => {
       userSockets.delete(userId);
