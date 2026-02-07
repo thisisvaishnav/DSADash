@@ -3,6 +3,7 @@ import http from 'http';
 import { Server } from 'socket.io';
 import { socketConfig } from '../../config/socket.config';
 import { TypedServer, TypedSocket, ServerToClientEvents } from './socket.types';
+import { auth } from '../../features/auth/auth.service'
 
 // ─── State ────────────────────────────────────────────────────────────
 let io: TypedServer | null = null;
@@ -42,6 +43,8 @@ const authMiddleware = async (socket: TypedSocket, next: (err?: Error) => void) 
 
     // import { auth } from '../../auth';   // Make sure to import your auth module
 
+    // Import the auth instance at the top:
+    // import { auth } from '../../features/auth/auth.service';
     const session = await auth.api.getSession({
       headers: { Authorization: `Bearer ${token}` }
     });
