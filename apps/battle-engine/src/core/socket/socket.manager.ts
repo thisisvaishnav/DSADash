@@ -1,126 +1,129 @@
+// socket.manager.ts
 import http from 'http';
 import { Server } from 'socket.io';
 import { socketConfig } from '../../config/socket.config';
-import {
-  TypedServer,
-  TypedSocket,
-  ClientToServerEvents,
-  ServerToClientEvents,
-  InterServerEvents,
-  SocketData,
-} from './socket.types';
+import { TypedServer, TypedSocket, ServerToClientEvents } from './socket.types';
 
-class SocketManager {
-  private io: TypedServer | null = null;
-  private userSocketMap: Map<string, string> = new Map(); // userId → socketId
+// ─── State ────────────────────────────────────────────────────────────
+let io: TypedServer | null = null;
+const userSockets = new Map<string, string>(); // userId → socketId
 
-  /** Initialize Socket.IO server */
-  init = (server: http.Server): TypedServer => {
-    if (this.io) return this.io;
+// ─── Initialize ───────────────────────────────────────────────────────
+export const initSocket = (server: http.Server): TypedServer => {
+  if (io) return io;
 
-    this.io = new Server<
-      ClientToServerEvents,
-      ServerToClientEvents,
-      InterServerEvents,
-      SocketData
-    >(server, socketConfig);
+  io = new Server(server, socketConfig);
 
-    this.io.on('connection', (socket: TypedSocket) => {
-      const userId = socket.data.userId;
-      if (userId) {
-        this.userSocketMap.set(userId, socket.id);
-      }
+  io.use(authMiddleware);           // verify token before connection
 
-      socket.on('disconnect', () => {
-        if (userId) {
-          this.userSocketMap.delete(userId);
-        }
-      });
+  io.on('connection', (socket) => {
+    const { userId, userName } = socket.data;
+    userSockets.set(userId, socket.id);
+    console.log(`🟢 ${userName} connected (${userSockets.size} online)`);
+
+    socket.on('disconnect', (reason) => {
+      userSockets.delete(userId);
+      console.log(`🔴 ${userName} disconnected: ${reason} (${userSockets.size} online)`);
     });
+  });
 
-    console.log('✅ Socket.IO initialized');
-    return this.io;
-  };
+  console.log('✅ Socket.IO initialized');
+  return io;
+};
 
-  /** Get the Socket.IO server instance */
-  getIO = (): TypedServer => {
-    if (!this.io) {
-      throw new Error('Socket.IO not initialized. Call init() first.');
+// ─── Auth Middleware ──────────────────────────────────────────────────
+const authMiddleware = async (socket: TypedSocket, next: (err?: Error) => void) => {
+  try {
+    const token = socket.handshake.auth.token;
+    if (!token) return next(new Error('Authentication required'));
+
+    // Example for integrating Better Auth token verification:
+    // (Replace with your actual Better Auth logic, api, and types)
+
+    // import { auth } from '../../auth';   // Make sure to import your auth module
+
+    const session = await auth.api.getSession({
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    if (!session || !session.user) {
+      return next(new Error('Invalid or expired token'));
     }
-    return this.io;
-  };
+    socket.data.userId = session.user.id;
+    socket.data.userName = session.user.name;
+    socket.data.userRating = session.user.rating;
 
-  /** Get socket ID for a user */
-  getSocketId = (userId: string): string | undefined => {
-    return this.userSocketMap.get(userId);
-  };
 
-  /** Check if a user is currently connected */
-  isUserOnline = (userId: string): boolean => {
-    return this.userSocketMap.has(userId);
-  };
+    next();
+  } catch {
+    next(new Error('Invalid token'));
+  }
+};
 
-  /** Emit event to a specific user */
-  emitToUser = <E extends keyof ServerToClientEvents>(
-    userId: string,
-    event: E,
-    ...args: Parameters<ServerToClientEvents[E]>
-  ): boolean => {
-    const socketId = this.userSocketMap.get(userId);
-    if (!socketId || !this.io) return false;
+// ─── Getters ─────────────────────────────────────────────────────────
+export const getIO = (): TypedServer => {
+  if (!io) throw new Error('Socket.IO not initialized');
+  return io;
+};
 
-    this.io.to(socketId).emit(event, ...args);
-    return true;
-  };
+export const getSocketId = (userId: string): string | undefined =>
+  userSockets.get(userId);
 
-  /** Emit event to a match room */
-  emitToMatch = <E extends keyof ServerToClientEvents>(
-    matchId: string,
-    event: E,
-    ...args: Parameters<ServerToClientEvents[E]>
-  ): void => {
-    if (!this.io) return;
-    this.io.to(`match:${matchId}`).emit(event, ...args);
-  };
+export const isUserOnline = (userId: string): boolean =>
+  userSockets.has(userId);
 
-  /** Add a socket to a match room */
-  joinMatchRoom = async (userId: string, matchId: string): Promise<void> => {
-    const socketId = this.userSocketMap.get(userId);
-    if (!socketId || !this.io) return;
+export const getOnlineCount = (): number =>
+  userSockets.size;
 
-    const socket = this.io.sockets.sockets.get(socketId);
-    if (socket) {
-      await socket.join(`match:${matchId}`);
-      socket.data.currentMatchId = matchId;
-    }
-  };
+// ─── Emitters ────────────────────────────────────────────────────────
+export const emitToUser = (
+  userId: string,
+  event: keyof ServerToClientEvents,
+  data: any,
+): boolean => {
+  const socketId = userSockets.get(userId);
+  if (!socketId || !io) return false;
+  io.to(socketId).emit(event, data);
+  return true;
+};
 
-  /** Remove a socket from a match room */
-  leaveMatchRoom = async (userId: string, matchId: string): Promise<void> => {
-    const socketId = this.userSocketMap.get(userId);
-    if (!socketId || !this.io) return;
+export const emitToMatch = (
+  matchId: string,
+  event: keyof ServerToClientEvents,
+  data: any,
+): void => {
+  if (!io) return;
+  io.to(`match:${matchId}`).emit(event, data);
+};
 
-    const socket = this.io.sockets.sockets.get(socketId);
-    if (socket) {
-      await socket.leave(`match:${matchId}`);
-      socket.data.currentMatchId = undefined;
-    }
-  };
+// ─── Room Management ─────────────────────────────────────────────────
+export const joinMatchRoom = async (userId: string, matchId: string): Promise<void> => {
+  const socketId = userSockets.get(userId);
+  if (!socketId || !io) return;
 
-  /** Get count of connected clients */
-  getOnlineCount = (): number => {
-    return this.userSocketMap.size;
-  };
+  const socket = io.sockets.sockets.get(socketId);
+  if (!socket) return;
 
-  /** Register a user's socket mapping (for auth middleware) */
-  registerUser = (userId: string, socketId: string): void => {
-    this.userSocketMap.set(userId, socketId);
-  };
+  await socket.join(`match:${matchId}`);
+  socket.data.currentMatchId = matchId;
+};
 
-  /** Unregister a user's socket mapping */
-  unregisterUser = (userId: string): void => {
-    this.userSocketMap.delete(userId);
-  };
-}
+export const leaveMatchRoom = async (userId: string, matchId: string): Promise<void> => {
+  const socketId = userSockets.get(userId);
+  if (!socketId || !io) return;
 
-export const socketManager = new SocketManager();
+  const socket = io.sockets.sockets.get(socketId);
+  if (!socket) return;
+
+  await socket.leave(`match:${matchId}`);
+  socket.data.currentMatchId = undefined;
+};
+
+// ─── Shutdown ────────────────────────────────────────────────────────
+export const shutdownSocket = async (): Promise<void> => {
+  if (!io) return;
+  io.disconnectSockets(true);
+  io.close();
+  userSockets.clear();
+  io = null;
+  console.log('🔌 Socket.IO shut down');
+};

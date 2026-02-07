@@ -1,20 +1,14 @@
 import http from "http";
-import { initIo } from './utils/socketInstance';
-import { setupSockets } from './sockets/index';
-import { PORT } from "./config/config";
-import { expirationManager } from "./utils/ExpirationManager";
-import { setupChatSocket } from "./sockets/chatsocket";
-import { app } from "./app";
 
-const server = http.createServer(app);
-export const io = initIo(server);
+import { db } from "./core/database/db.client"; 
+import { redis } from "./core/queue/redis.client";
+import { socketManager } from "./core/socket/socket.manager";
+import { corsConfig } from "./config/cors.config";
+import { socketConfig } from "./config/socket.config";  
+const server = http.createServer();
+export const io = socketManager.init(server);
 
-setupSockets(io);
-setupChatSocket(io);
 
-server.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
-  expirationManager.recover().catch(err => {
-    console.error("Expiration recovery failed:", err);
-  });
+server.listen(3000, () => {
+  console.log(`Server running on http://localhost:3000`);
 });
