@@ -17,9 +17,9 @@ import {
 import {
   createMatch,
   markPlayerReady,
-  recordSubmission,
   getActiveMatchByUser,
 } from './match.service';
+import { createSubmission } from '../submission/submission.service';
 
 // ─── Register Match Socket Handlers ─────────────────────────────────
 // Call this inside io.on('connection', ...) for each connected socket
@@ -129,7 +129,7 @@ export const registerMatchHandlers = (socket: TypedSocket): void => {
       }
 
       const { matchId, questionId, code, language } = parsed.data;
-      await recordSubmission(matchId, userId, questionId, code, language);
+      await createSubmission(userId, { matchId, questionId, code, language });
     } catch (err) {
       console.error('Error in match:submit-code:', err);
       socket.emit('error', { message: 'Failed to submit code', code: 'INTERNAL_ERROR' });

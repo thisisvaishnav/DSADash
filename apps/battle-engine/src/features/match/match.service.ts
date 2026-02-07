@@ -178,35 +178,6 @@ const startMatch = (match: ActiveMatch): void => {
 };
 
 // ─── Record a Submission ────────────────────────────────────────────
-export const recordSubmission = async (
-  matchId: string,
-  userId: string,
-  questionId: number,
-  code: string,
-  language: string,
-): Promise<void> => {
-  const match = activeMatches.get(matchId);
-  if (!match || match.status !== 'running') return;
-
-  const player = match.players.find((p) => p.userId === userId);
-  if (!player) return;
-
-  // Save submission to DB
-  await db.submission.create({
-    data: {
-      userId,
-      questionId,
-      matchId,
-      code,
-      status: 'pending',
-    },
-  });
-
-  // TODO: Send to worker queue for actual code execution / test evaluation
-  // For now, we just record it. The worker would call back with results
-  // via Redis pub/sub or a callback endpoint.
-};
-
 // ─── Mark Question Solved (called by worker callback) ───────────────
 export const markQuestionSolved = (
   matchId: string,
