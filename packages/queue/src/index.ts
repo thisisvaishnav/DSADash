@@ -6,5 +6,6 @@ export const connection = new Redis(REDIS_URL, {
   maxRetriesPerRequest: null,
 });
 
+
 export const WAITING_LIST = 'match:waiting';
 export const ACTIVE_MATCHES = 'match:active';
