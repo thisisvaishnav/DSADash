@@ -1,135 +1,197 @@
-# Turborepo starter
+# DSA Dash
 
-This Turborepo starter is maintained by the Turborepo core team.
+A real-time competitive DSA (Data Structures & Algorithms) battle platform where users are matched against opponents to solve coding problems head-to-head.
 
-## Using this example
+## Tech Stack
 
-Run the following command:
+- **Frontend**: Next.js, React, TypeScript, TailwindCSS
+- **Backend**: Express, Socket.IO, Better Auth
+- **Database**: PostgreSQL (Neon) + Prisma ORM
+- **Queue/Cache**: Redis
+- **Monorepo**: TurboRepo + pnpm workspaces
 
-```sh
-npx create-turbo@latest
+## Project Structure
+
+```
+DSADash/
+├── apps/
+│   ├── web/                        # Next.js frontend
+│   ├── battle-engine/              # Express + Socket.IO backend
+│   │   └── src/
+│   │       ├── config/             # Configuration
+│   │       │   ├── env.config.ts   # Zod-validated environment variables
+│   │       │   ├── cors.config.ts  # CORS settings
+│   │       │   └── socket.config.ts# Socket.IO config
+│   │       ├── core/               # Core infrastructure
+│   │       │   ├── socket/
+│   │       │   │   ├── socket.manager.ts   # Socket.IO singleton manager
+│   │       │   │   └── socket.types.ts     # Typed Socket.IO events
+│   │       │   ├── database/
+│   │       │   │   └── db.client.ts        # Prisma client wrapper
+│   │       │   └── queue/
+│   │       │       └── redis.client.ts     # Redis client wrapper
+│   │       └── index.ts
+│   └── worker/                     # Background job worker
+├── packages/
+│   ├── db/                         # Prisma schema + client
+│   │   ├── prisma/
+│   │   │   └── schema.prisma       # Database schema
+│   │   └── src/
+│   │       ├── index.ts            # Prisma client singleton
+│   │       └── seed.ts             # Database seeder
+│   ├── types/                      # Shared TypeScript types
+│   ├── queue/                      # Queue management
+│   ├── ui/                         # Shared UI components
+│   ├── eslint-config/              # ESLint configuration
+│   └── typescript-config/          # Shared tsconfig presets
+├── turbo.json
+├── pnpm-workspace.yaml
+└── package.json
 ```
 
-## What's inside?
+## Database Schema
 
-This Turborepo includes the following packages/apps:
+| Model              | Purpose                                    |
+| ------------------- | ------------------------------------------ |
+| `User`              | Auth, profile, ELO rating (default 1200)   |
+| `Account`           | OAuth provider accounts (Google, GitHub)    |
+| `Session`           | Token-based session management             |
+| `Verification`      | Email/token verification                   |
+| `Question`          | DSA problems with category + test cases    |
+| `Match`             | Competitive match (WAITING/RUNNING/FINISHED) |
+| `MatchParticipant`  | Links users to matches + rating changes    |
+| `MatchQuestion`     | Ordered questions assigned to a match      |
+| `Submission`        | User code submissions per match            |
+| `FriendRequest`     | Friend request system (PENDING/ACCEPTED/REJECTED) |
+| `Friend`            | Established friendships                    |
+| `Message`           | Direct messages between users              |
+| `Feedback`          | User feedback                              |
+| `LeaderboardEntry`  | Rankings, wins/losses, streaks             |
 
-### Apps and Packages
+## Socket Events
 
-- `docs`: a [Next.js](https://nextjs.org/) app
-- `web`: another [Next.js](https://nextjs.org/) app
-- `@repo/ui`: a stub React component library shared by both `web` and `docs` applications
-- `@repo/eslint-config`: `eslint` configurations (includes `eslint-config-next` and `eslint-config-prettier`)
-- `@repo/typescript-config`: `tsconfig.json`s used throughout the monorepo
+### Client to Server
 
-Each package/app is 100% [TypeScript](https://www.typescriptlang.org/).
+| Event                | Payload                                     |
+| -------------------- | ------------------------------------------- |
+| `match:join-queue`   | `{ userId }`                                |
+| `match:leave-queue`  | `{ userId }`                                |
+| `match:submit-code`  | `{ matchId, questionId, code, language }`   |
+| `match:ready`        | `{ matchId, userId }`                       |
+| `chat:send-message`  | `{ receiverId, content }`                   |
 
-### Utilities
+### Server to Client
 
-This Turborepo has some additional tools already setup for you:
+| Event                     | Payload                                          |
+| ------------------------- | ------------------------------------------------ |
+| `match:found`             | `{ matchId, opponent, questions }`               |
+| `match:started`           | `{ matchId, startedAt }`                         |
+| `match:submission-result` | `{ questionId, status, testsPassed, totalTests }` |
+| `match:opponent-progress` | `{ questionId, solved }`                         |
+| `match:timer-update`      | `{ matchId, remainingSeconds }`                  |
+| `match:ended`             | `{ matchId, winnerId, ratingChanges }`           |
 
-- [TypeScript](https://www.typescriptlang.org/) for static type checking
-- [ESLint](https://eslint.org/) for code linting
-- [Prettier](https://prettier.io) for code formatting
+## Getting Started
+
+### Prerequisites
+
+- Node.js >= 18
+- pnpm >= 9
+- PostgreSQL (or Neon account)
+- Redis
+
+### Installation
+
+```bash
+# Clone the repository
+git clone https://github.com/your-username/DSADash.git
+cd DSADash
+
+# Install dependencies
+pnpm install
+```
+
+### Environment Variables
+
+Create a `.env` file in `packages/db/`:
+
+```env
+DATABASE_URL="postgresql://user:password@host:port/database?sslmode=require"
+```
+
+Create a `.env` file in `apps/battle-engine/` (or root):
+
+```env
+NODE_ENV=development
+SERVER_PORT=4000
+DATABASE_URL=postgresql://user:password@host:port/database?sslmode=require
+REDIS_URL=redis://localhost:6379
+BETTER_AUTH_SECRET=your-secret-key
+BETTER_AUTH_URL=http://localhost:4000
+CLIENT_URL=http://localhost:3000
+MATCH_DURATION_MINUTES=15
+MATCH_QUESTIONS_COUNT=5
+```
+
+### Database Setup
+
+```bash
+cd packages/db
+
+# Generate Prisma Client
+npx prisma generate
+
+# Run migrations
+npx prisma migrate dev
+
+# (Optional) Seed the database
+pnpm db:seed
+
+# (Optional) Open Prisma Studio
+npx prisma studio
+```
+
+### Development
+
+```bash
+# Run all apps
+pnpm dev
+
+# Run specific app
+pnpm dev --filter=web
+pnpm dev --filter=battle-engine
+```
 
 ### Build
 
-To build all apps and packages, run the following command:
+```bash
+# Build all apps and packages
+pnpm build
 
-```
-cd my-turborepo
-
-# With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed (recommended)
-turbo build
-
-# Without [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation), use your package manager
-npx turbo build
-yarn dlx turbo build
-pnpm exec turbo build
+# Build a specific app
+pnpm build --filter=web
 ```
 
-You can build a specific package by using a [filter](https://turborepo.dev/docs/crafting-your-repository/running-tasks#using-filters):
+## Scripts
 
-```
-# With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed (recommended)
-turbo build --filter=docs
+| Command            | Description                        |
+| ------------------ | ---------------------------------- |
+| `pnpm dev`         | Start all apps in development mode |
+| `pnpm build`       | Build all apps and packages        |
+| `pnpm lint`        | Lint all packages                  |
+| `pnpm format`      | Format code with Prettier          |
+| `pnpm check-types` | Run TypeScript type checking       |
 
-# Without [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation), use your package manager
-npx turbo build --filter=docs
-yarn exec turbo build --filter=docs
-pnpm exec turbo build --filter=docs
-```
+### Database Scripts (in `packages/db`)
 
-### Develop
+| Command             | Description                      |
+| ------------------- | -------------------------------- |
+| `pnpm db:generate`  | Generate Prisma Client           |
+| `pnpm db:push`      | Push schema to database (dev)    |
+| `pnpm db:migrate`   | Run database migrations          |
+| `pnpm db:studio`    | Open Prisma Studio GUI           |
+| `pnpm db:seed`      | Seed database with sample data   |
 
-To develop all apps and packages, run the following command:
+## License
 
-```
-cd my-turborepo
-
-# With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed (recommended)
-turbo dev
-
-# Without [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation), use your package manager
-npx turbo dev
-yarn exec turbo dev
-pnpm exec turbo dev
-```
-
-You can develop a specific package by using a [filter](https://turborepo.dev/docs/crafting-your-repository/running-tasks#using-filters):
-
-```
-# With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed (recommended)
-turbo dev --filter=web
-
-# Without [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation), use your package manager
-npx turbo dev --filter=web
-yarn exec turbo dev --filter=web
-pnpm exec turbo dev --filter=web
-```
-
-### Remote Caching
-
-> [!TIP]
-> Vercel Remote Cache is free for all plans. Get started today at [vercel.com](https://vercel.com/signup?/signup?utm_source=remote-cache-sdk&utm_campaign=free_remote_cache).
-
-Turborepo can use a technique known as [Remote Caching](https://turborepo.dev/docs/core-concepts/remote-caching) to share cache artifacts across machines, enabling you to share build caches with your team and CI/CD pipelines.
-
-By default, Turborepo will cache locally. To enable Remote Caching you will need an account with Vercel. If you don't have an account you can [create one](https://vercel.com/signup?utm_source=turborepo-examples), then enter the following commands:
-
-```
-cd my-turborepo
-
-# With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed (recommended)
-turbo login
-
-# Without [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation), use your package manager
-npx turbo login
-yarn exec turbo login
-pnpm exec turbo login
-```
-
-This will authenticate the Turborepo CLI with your [Vercel account](https://vercel.com/docs/concepts/personal-accounts/overview).
-
-Next, you can link your Turborepo to your Remote Cache by running the following command from the root of your Turborepo:
-
-```
-# With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed (recommended)
-turbo link
-
-# Without [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation), use your package manager
-npx turbo link
-yarn exec turbo link
-pnpm exec turbo link
-```
-
-## Useful Links
-
-Learn more about the power of Turborepo:
-
-- [Tasks](https://turborepo.dev/docs/crafting-your-repository/running-tasks)
-- [Caching](https://turborepo.dev/docs/crafting-your-repository/caching)
-- [Remote Caching](https://turborepo.dev/docs/core-concepts/remote-caching)
-- [Filtering](https://turborepo.dev/docs/crafting-your-repository/running-tasks#using-filters)
-- [Configuration Options](https://turborepo.dev/docs/reference/configuration)
-- [CLI Usage](https://turborepo.dev/docs/reference/command-line-reference)
+MIT
